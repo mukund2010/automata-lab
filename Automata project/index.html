@@ -794,6 +794,7 @@ td.not-in-l{color:var(--bad);font-weight:600}
       <div class="hero-ctas">
         <a class="btn btn-primary" href="#learn">Enter the Laboratory</a>
         <a class="btn" href="#automata">Explore Automata</a>
+        <a class="btn btn-dark" href="#simulator" onclick="switchTab('backend')">⚡ Live Backend API</a>
       </div>
       <div class="hero-meta" id="heroMeta"></div>
     </div>
@@ -1059,6 +1060,7 @@ td.not-in-l{color:var(--bad);font-weight:600}
       <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-game" data-tab="game"><span class="num">03</span>Quantifier game</button>
       <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-theory" data-tab="theory"><span class="num">04</span>Theory</button>
       <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-selftest" data-tab="selftest"><span class="num">05</span>Self-test</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-backend" data-tab="backend"><span class="num">06</span>Live Backend API</button>
     </nav>
 
     <!-- ======= SIMULATOR TAB ======= -->
@@ -1267,6 +1269,57 @@ td.not-in-l{color:var(--bad);font-weight:600}
           <button class="btn btn-primary" id="runTestsBtn" type="button">Run all tests</button>
         </div>
         <div id="testResults" class="mt-2"></div>
+      </div>
+    </div>
+
+    <!-- ======= LIVE BACKEND API (RENDER) TAB ======= -->
+    <div class="tab-content" id="tab-backend" role="tabpanel" aria-label="Live Backend API">
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <span>Render Cloud Backend API Client</span>
+          <span id="backendApiBadgeTop" class="badge" style="background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok)">Connecting...</span>
+        </div>
+        <p class="lede" style="margin-bottom:16px">This frontend communicates with the Node.js / Express backend deployed on Render at <a href="https://automata-lab-backend.onrender.com" target="_blank" rel="noopener"><code>https://automata-lab-backend.onrender.com</code></a>. Send live REST requests below:</p>
+
+        <div class="split" style="gap:20px">
+          <div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label for="apiEndpointSelect">Endpoint</label>
+              <select id="apiEndpointSelect">
+                <option value="check-membership">POST /api/check-membership (Test Language Membership)</option>
+                <option value="decompositions">POST /api/decompositions (Compute Splittings x, y, z)</option>
+                <option value="pump">POST /api/pump (Pumping Series xyⁱz)</option>
+                <option value="languages">GET /api/languages (List All Formal Languages)</option>
+                <option value="health">GET /api/health (Service Health & Uptime)</option>
+                <option value="quiz-round">GET /api/quiz-round (Random Challenge Round)</option>
+              </select>
+            </div>
+
+            <div id="apiParamGroup" class="form-row" style="margin-bottom:12px">
+              <div class="form-group">
+                <label for="apiInputString">Input String (w)</label>
+                <input type="text" id="apiInputString" class="mono" value="aabb" placeholder="e.g. aabb">
+              </div>
+              <div class="form-group" style="max-width:140px">
+                <label for="apiInputP">Length (p)</label>
+                <input type="number" id="apiInputP" class="mono" value="3" min="1" max="20">
+              </div>
+            </div>
+
+            <button class="btn btn-primary" id="btnExecuteBackendApi" type="button" style="width:100%">
+              ⚡ Execute Request on Render Backend
+            </button>
+          </div>
+
+          <div>
+            <div class="card-kicker">Live HTTP Response from Render</div>
+            <div id="apiResponseStatus" style="font-family:var(--font-mono);font-size:.82rem;margin-bottom:6px;color:var(--ink-2)">Status: Ready</div>
+            <pre id="apiResponseBox" class="proof-block" style="max-height:300px;overflow-y:auto;background:var(--paper);padding:12px;font-size:.78rem;line-height:1.45">{
+  "status": "ready",
+  "backendUrl": "https://automata-lab-backend.onrender.com"
+}</pre>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -6301,30 +6354,120 @@ const LabCore = (function () {
   async function syncBackendStatus() {
     const badge = document.getElementById("backendStatusBadge");
     const text = document.getElementById("backendStatusText");
-    if (!badge || !text) return;
+    const topBadge = document.getElementById("backendApiBadgeTop");
 
+    const t0 = performance.now();
     try {
       const res = await fetch(`${RENDER_BACKEND_URL}/api/health`, { method: "GET" });
+      const lat = Math.round(performance.now() - t0);
       if (res.ok) {
         const data = await res.json();
-        badge.classList.remove("error");
-        badge.classList.add("connected");
-        text.textContent = "Backend: Render (Online)";
-        badge.setAttribute("title", `Connected to Render API (v${data.uptime ? Math.floor(data.uptime) + "s uptime" : "online"})`);
+        if (badge) {
+          badge.classList.remove("error");
+          badge.classList.add("connected");
+        }
+        if (text) text.textContent = `Backend: Render (${lat}ms)`;
+        if (topBadge) {
+          topBadge.textContent = `Online (${lat}ms latency)`;
+          topBadge.style.color = "var(--ok)";
+          topBadge.style.borderColor = "var(--ok)";
+          topBadge.style.background = "var(--ok-soft)";
+        }
       } else {
         throw new Error("HTTP " + res.status);
       }
     } catch (err) {
-      badge.classList.remove("connected");
-      text.textContent = "Backend: Render (Waking up...)";
+      if (badge) badge.classList.remove("connected");
+      if (text) text.textContent = "Backend: Render (Waking up...)";
+      if (topBadge) {
+        topBadge.textContent = "Connecting...";
+        topBadge.style.color = "var(--warn)";
+        topBadge.style.borderColor = "var(--warn)";
+        topBadge.style.background = "var(--warn-soft)";
+      }
       setTimeout(syncBackendStatus, 6000);
     }
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", syncBackendStatus);
-  } else {
+  function initBackendApiClient() {
+    const epSelect = document.getElementById("apiEndpointSelect");
+    const paramGroup = document.getElementById("apiParamGroup");
+    const execBtn = document.getElementById("btnExecuteBackendApi");
+    const resBox = document.getElementById("apiResponseBox");
+    const resStatus = document.getElementById("apiResponseStatus");
+    const strInput = document.getElementById("apiInputString");
+    const pInput = document.getElementById("apiInputP");
+
+    if (!execBtn || !epSelect || !resBox) return;
+
+    epSelect.addEventListener("change", () => {
+      const ep = epSelect.value;
+      if (ep === "health" || ep === "languages" || ep === "quiz-round") {
+        if (paramGroup) paramGroup.style.display = "none";
+      } else {
+        if (paramGroup) paramGroup.style.display = "flex";
+      }
+    });
+
+    execBtn.addEventListener("click", async () => {
+      const ep = epSelect.value;
+      const w = strInput ? strInput.value.trim() : "aabb";
+      const p = pInput ? parseInt(pInput.value, 10) || 3 : 3;
+
+      execBtn.disabled = true;
+      execBtn.textContent = "Connecting to Render...";
+      resStatus.textContent = "Status: Sending request to " + RENDER_BACKEND_URL + "...";
+
+      const t0 = performance.now();
+      try {
+        let url = `${RENDER_BACKEND_URL}/api/${ep}`;
+        let opt = { method: "GET" };
+
+        if (ep === "check-membership") {
+          opt = {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lang: "anbn", w })
+          };
+        } else if (ep === "decompositions") {
+          opt = {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ w, p })
+          };
+        } else if (ep === "pump") {
+          opt = {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lang: "anbn", x: "", y: w.slice(0, 1), z: w.slice(1), maxI: 5 })
+          };
+        }
+
+        const res = await fetch(url, opt);
+        const lat = Math.round(performance.now() - t0);
+        const json = await res.json();
+
+        resStatus.innerHTML = `<span style="color:var(--ok);font-weight:700">✓ HTTP ${res.status} OK</span> · ${lat}ms latency · Render Cloud Service`;
+        resBox.textContent = JSON.stringify(json, null, 2);
+      } catch (err) {
+        resStatus.innerHTML = `<span style="color:var(--bad);font-weight:700">✗ Network Error:</span> ${err.message}`;
+        resBox.textContent = JSON.stringify({ error: err.message, target: RENDER_BACKEND_URL }, null, 2);
+      } finally {
+        execBtn.disabled = false;
+        execBtn.textContent = "⚡ Execute Request on Render Backend";
+      }
+    });
+  }
+
+  function setup() {
     syncBackendStatus();
+    initBackendApiClient();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", setup);
+  } else {
+    setup();
   }
 })();
 </script>
