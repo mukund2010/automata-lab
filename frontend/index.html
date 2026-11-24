@@ -79,7 +79,16 @@ button{font:inherit;color:inherit}
   .navlinks a{padding:13px 10px;border-bottom:1px solid var(--line);font-size:.95rem}
   .navlinks a.is-active::after{left:0;right:auto;top:10px;bottom:10px;width:3px;height:auto}
   .topnav .nav-cta{display:none}
+  .backend-badge{display:none}
 }
+.backend-badge{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:.74rem;padding:5px 12px;border-radius:18px;background:var(--paper);border:1px solid var(--line);color:var(--ink-2);text-decoration:none;transition:all .2s ease;flex-shrink:0}
+.backend-badge:hover{border-color:var(--ink);color:var(--ink)}
+.backend-dot{width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block;animation:pulseDot 1.8s infinite}
+.backend-badge.connected{border-color:var(--ok);background:var(--ok-soft);color:var(--ok)}
+.backend-badge.connected .backend-dot{background:var(--ok);animation:none}
+.backend-badge.error{border-color:var(--bad);background:var(--bad-soft);color:var(--bad)}
+.backend-badge.error .backend-dot{background:var(--bad);animation:none}
+@keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.25}}
 
 /* --- Sections --- */
 .section{position:relative;padding:96px 0;border-bottom:1px solid var(--line);overflow:hidden;overflow:clip;scroll-margin-top:var(--nav-h)}
@@ -762,6 +771,10 @@ td.not-in-l{color:var(--bad);font-weight:600}
       <a href="#challenges" data-nav="challenges">Challenges</a>
       <a href="#dashboard" class="nav-progress" data-nav="dashboard" aria-label="Your progress dashboard"><span class="mini-meter" aria-hidden="true"><span id="navMeter"></span></span><span id="navProgressText">0%</span></a>
     </nav>
+    <a class="backend-badge" id="backendStatusBadge" href="https://automata-lab-backend.onrender.com" target="_blank" rel="noopener noreferrer" title="Connected to Render Backend API">
+      <span class="backend-dot" aria-hidden="true"></span>
+      <span id="backendStatusText" class="backend-text">Backend: Connecting...</span>
+    </a>
     <a class="btn btn-primary nav-cta" href="#experiments">Start Experiment</a>
     <button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="navlinks" aria-label="Open menu"><span></span></button>
   </div>
@@ -6277,6 +6290,42 @@ const LabCore = (function () {
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
+})();
+</script>
+<script>
+// --- Backend Integration (Render) ---
+(function() {
+  const RENDER_BACKEND_URL = "https://automata-lab-backend.onrender.com";
+  window.BACKEND_API_URL = RENDER_BACKEND_URL;
+
+  async function syncBackendStatus() {
+    const badge = document.getElementById("backendStatusBadge");
+    const text = document.getElementById("backendStatusText");
+    if (!badge || !text) return;
+
+    try {
+      const res = await fetch(`${RENDER_BACKEND_URL}/api/health`, { method: "GET" });
+      if (res.ok) {
+        const data = await res.json();
+        badge.classList.remove("error");
+        badge.classList.add("connected");
+        text.textContent = "Backend: Render (Online)";
+        badge.setAttribute("title", `Connected to Render API (v${data.uptime ? Math.floor(data.uptime) + "s uptime" : "online"})`);
+      } else {
+        throw new Error("HTTP " + res.status);
+      }
+    } catch (err) {
+      badge.classList.remove("connected");
+      text.textContent = "Backend: Render (Waking up...)";
+      setTimeout(syncBackendStatus, 6000);
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", syncBackendStatus);
+  } else {
+    syncBackendStatus();
+  }
 })();
 </script>
 </body>
